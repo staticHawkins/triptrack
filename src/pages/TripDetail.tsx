@@ -550,7 +550,7 @@ function BudgetTab({
 
 // ─── Add Activity Form ──────────────────────────────────────────────────────────
 function AddActivityForm({
-  tripId,
+  tripId: _tripId,
   tripStart,
   tripEnd,
   prefilledDate,
@@ -562,7 +562,7 @@ function AddActivityForm({
   tripEnd: string
   prefilledDate?: string
   onClose: () => void
-  onSave: (item: { date: string; time?: string; title: string; location?: string; notes?: string }) => Promise<unknown>
+  onSave: (item: { date: string; time?: string; title: string; location?: string; notes?: string; type?: string }) => Promise<unknown>
 }) {
   const defaultDate = prefilledDate || new Date().toISOString().split('T')[0]
   const [form, setForm] = useState({
