@@ -95,6 +95,12 @@ export function useTripDetail(tripId: string) {
     return error
   }, [fetch])
 
+  const deleteExpense = useCallback(async (expenseId: string) => {
+    const { error } = await supabase.from('expenses').delete().eq('id', expenseId)
+    if (!error) fetch()
+    return error
+  }, [fetch])
+
   const addExpense = useCallback(async (expense: {
     category: string
     amount: number
@@ -126,5 +132,5 @@ export function useTripDetail(tripId: string) {
     return { result: data as string | null, error }
   }, [tripId, fetch])
 
-  return { trip, loading, error, refetch: fetch, addItineraryItem, deleteItineraryItem, inviteMember, updateBudgets, addExpense }
+  return { trip, loading, error, refetch: fetch, addItineraryItem, deleteItineraryItem, deleteExpense, inviteMember, updateBudgets, addExpense }
 }

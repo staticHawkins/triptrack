@@ -357,10 +357,12 @@ function BudgetTab({
   trip,
   onEditBudgets,
   onLogExpense,
+  onDeleteExpense,
 }: {
   trip: ReturnType<typeof useTripDetail>['trip'] & object
   onEditBudgets: () => void
   onLogExpense: () => void
+  onDeleteExpense: (id: string) => void
 }) {
   if (!trip) return null
 
@@ -530,16 +532,17 @@ function BudgetTab({
                   {exp.paid_by ? ` · ${trip.trip_members.find(m => m.user_id === exp.paid_by)?.profiles.display_name ?? 'Unknown'}` : ''}
                 </p>
               </div>
-              <p
-                style={{
-                  fontSize: 14,
-                  fontWeight: 600,
-                  color: C.terra,
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                ${exp.amount.toLocaleString()}
-              </p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                <p style={{ fontSize: 14, fontWeight: 600, color: C.terra, whiteSpace: 'nowrap' }}>
+                  ${exp.amount.toLocaleString()}
+                </p>
+                <button
+                  onClick={() => onDeleteExpense(exp.id)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: C.inkMuted, display: 'flex' }}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
             </div>
           )
         })}
@@ -1008,7 +1011,7 @@ export default function TripDetail() {
   const navigate = useNavigate()
   const { user } = useAuth()
 
-  const { trip, loading, error, addItineraryItem, deleteItineraryItem, inviteMember, updateBudgets, addExpense } =
+  const { trip, loading, error, addItineraryItem, deleteItineraryItem, deleteExpense, inviteMember, updateBudgets, addExpense } =
     useTripDetail(id!)
 
   const [tab, setTab] = useState<'dashboard' | 'itinerary' | 'budget'>('dashboard')
@@ -1214,6 +1217,7 @@ export default function TripDetail() {
             trip={trip}
             onEditBudgets={() => setShowEditBudgets(true)}
             onLogExpense={() => setShowLogExpense(true)}
+            onDeleteExpense={deleteExpense}
           />
         )}
       </div>
