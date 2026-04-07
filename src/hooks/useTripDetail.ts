@@ -107,6 +107,12 @@ export function useTripDetail(tripId: string) {
     return error
   }, [fetch])
 
+  const updateTrip = useCallback(async (updates: Partial<Pick<Trip, 'name' | 'destination' | 'start_date' | 'end_date'>>) => {
+    const { error } = await supabase.from('trips').update(updates).eq('id', tripId)
+    if (!error) fetch()
+    return error
+  }, [tripId, fetch])
+
   const updateItineraryItem = useCallback(async (itemId: string, updates: Partial<ItineraryItem>) => {
     const { error } = await supabase.from('itinerary_items').update(updates).eq('id', itemId)
     if (!error) fetch()
@@ -144,5 +150,5 @@ export function useTripDetail(tripId: string) {
     return { result: data as string | null, error }
   }, [tripId, fetch])
 
-  return { trip, loading, error, refetch: fetch, addItineraryItem, deleteItineraryItem, updateItineraryItem, deleteExpense, updateExpense, inviteMember, updateBudgets, addExpense }
+  return { trip, loading, error, refetch: fetch, updateTrip, addItineraryItem, deleteItineraryItem, updateItineraryItem, deleteExpense, updateExpense, inviteMember, updateBudgets, addExpense }
 }

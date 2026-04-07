@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Plus, Trash2, UserPlus, Plane, UtensilsCrossed, Star, Home, MoreHorizontal } from 'lucide-react'
+import { Plus, Trash2, Pencil, UserPlus, Plane, UtensilsCrossed, Star, Home, MoreHorizontal } from 'lucide-react'
 import TopNav from '../components/TopNav'
 import TripBanner from '../components/TripBanner'
 import ProgressBar from '../components/ProgressBar'
@@ -253,6 +253,67 @@ function ActivityCard({
             <Trash2 size={13} />
           </button>
         )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Edit Trip Form ─────────────────────────────────────────────────────────────
+function EditTripForm({
+  trip,
+  onClose,
+  onSave,
+}: {
+  trip: ReturnType<typeof useTripDetail>['trip'] & object
+  onClose: () => void
+  onSave: (updates: { name: string; destination: string; start_date: string; end_date: string }) => Promise<unknown>
+}) {
+  const [form, setForm] = useState({
+    name: trip.name,
+    destination: trip.destination,
+    start_date: trip.start_date,
+    end_date: trip.end_date,
+  })
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const set = (k: keyof typeof form, v: string) => setForm(f => ({ ...f, [k]: v }))
+
+  const handleSave = async () => {
+    if (!form.name.trim()) { setError('Trip name is required.'); return }
+    if (!form.destination.trim()) { setError('Destination is required.'); return }
+    if (form.end_date < form.start_date) { setError('End date must be after start date.'); return }
+    setSaving(true)
+    const err = await onSave({ name: form.name.trim(), destination: form.destination.trim(), start_date: form.start_date, end_date: form.end_date })
+    if (err) { setError((err as { message: string }).message); setSaving(false); return }
+    onClose()
+  }
+
+  return (
+    <div>
+      {error && (
+        <p style={{ fontSize: 13, color: C.danger, background: C.dangerPale, padding: '8px 12px', borderRadius: 8, marginBottom: 14 }}>
+          {error}
+        </p>
+      )}
+      <SheetField label="Trip name">
+        <input value={form.name} onChange={e => set('name', e.target.value)} style={sheetInputStyle} />
+      </SheetField>
+      <SheetField label="Destination">
+        <input value={form.destination} onChange={e => set('destination', e.target.value)} style={sheetInputStyle} />
+      </SheetField>
+      <SheetField label="Start date">
+        <input type="date" value={form.start_date} onChange={e => set('start_date', e.target.value)} style={sheetInputStyle} />
+      </SheetField>
+      <SheetField label="End date">
+        <input type="date" value={form.end_date} min={form.start_date} onChange={e => set('end_date', e.target.value)} style={sheetInputStyle} />
+      </SheetField>
+      <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
+        <button onClick={onClose} style={{ flex: 1, padding: '10px', borderRadius: 8, border: '1px solid rgba(26,26,46,0.15)', background: C.white, fontSize: 13, fontWeight: 500, color: C.inkMuted, cursor: 'pointer', fontFamily: 'inherit' }}>
+          Cancel
+        </button>
+        <button onClick={handleSave} disabled={saving} style={{ flex: 2, padding: '10px', borderRadius: 8, background: saving ? C.inkMuted : C.terra, color: C.white, border: 'none', fontSize: 13, fontWeight: 600, cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit' }}>
+          {saving ? 'Saving…' : 'Save changes'}
+        </button>
       </div>
     </div>
   )
@@ -1017,7 +1078,7 @@ export default function TripDetail() {
   const navigate = useNavigate()
   const { user } = useAuth()
 
-  const { trip, loading, error, addItineraryItem, deleteItineraryItem, updateItineraryItem, deleteExpense, updateExpense, inviteMember, updateBudgets, addExpense } =
+  const { trip, loading, error, updateTrip, addItineraryItem, deleteItineraryItem, updateItineraryItem, deleteExpense, updateExpense, inviteMember, updateBudgets, addExpense } =
     useTripDetail(id!)
 
   const [tab, setTab] = useState<'dashboard' | 'itinerary' | 'budget'>('dashboard')
@@ -1028,6 +1089,7 @@ export default function TripDetail() {
   const [showEditBudgets, setShowEditBudgets] = useState(false)
   const [showLogExpense, setShowLogExpense] = useState(false)
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
+  const [showEditTrip, setShowEditTrip] = useState(false)
 
   const openAddActivity = (date?: string) => {
     setActivityDate(date)
@@ -1094,19 +1156,24 @@ export default function TripDetail() {
 
       {/* Hero banner */}
       <TripBanner destination={trip.destination} height={140}>
-        <div style={{ padding: '0 20px 0' }}>
-          <p
-            style={{
-              fontFamily: "'Playfair Display', serif",
-              fontSize: 24,
-              fontWeight: 700,
-              color: '#fff',
-              marginBottom: 3,
-              textShadow: '0 1px 8px rgba(0,0,0,0.4)',
-            }}
-          >
-            {trip.name}
-          </p>
+        <div
+          onClick={() => setShowEditTrip(true)}
+          style={{ padding: '0 20px 0', cursor: 'pointer' }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+            <p
+              style={{
+                fontFamily: "'Playfair Display', serif",
+                fontSize: 24,
+                fontWeight: 700,
+                color: '#fff',
+                textShadow: '0 1px 8px rgba(0,0,0,0.4)',
+              }}
+            >
+              {trip.name}
+            </p>
+            <Pencil size={14} color="rgba(255,255,255,0.6)" />
+          </div>
           <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', textShadow: '0 1px 4px rgba(0,0,0,0.4)' }}>
             {trip.destination} · {fmtDate(trip.start_date)} – {fmtDateFull(trip.end_date)}
           </p>
@@ -1267,6 +1334,17 @@ export default function TripDetail() {
             trip={trip}
             onClose={() => setShowEditBudgets(false)}
             onSave={updateBudgets}
+          />
+        )}
+      </Sheet>
+
+      {/* Edit trip sheet */}
+      <Sheet open={showEditTrip} onClose={() => setShowEditTrip(false)} title="Edit trip">
+        {showEditTrip && (
+          <EditTripForm
+            trip={trip}
+            onClose={() => setShowEditTrip(false)}
+            onSave={updateTrip}
           />
         )}
       </Sheet>
