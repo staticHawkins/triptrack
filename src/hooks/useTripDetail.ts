@@ -101,6 +101,18 @@ export function useTripDetail(tripId: string) {
     return error
   }, [fetch])
 
+  const updateExpense = useCallback(async (expenseId: string, updates: Partial<Expense>) => {
+    const { error } = await supabase.from('expenses').update(updates).eq('id', expenseId)
+    if (!error) fetch()
+    return error
+  }, [fetch])
+
+  const updateItineraryItem = useCallback(async (itemId: string, updates: Partial<ItineraryItem>) => {
+    const { error } = await supabase.from('itinerary_items').update(updates).eq('id', itemId)
+    if (!error) fetch()
+    return error
+  }, [fetch])
+
   const addExpense = useCallback(async (expense: {
     category: string
     amount: number
@@ -132,5 +144,5 @@ export function useTripDetail(tripId: string) {
     return { result: data as string | null, error }
   }, [tripId, fetch])
 
-  return { trip, loading, error, refetch: fetch, addItineraryItem, deleteItineraryItem, deleteExpense, inviteMember, updateBudgets, addExpense }
+  return { trip, loading, error, refetch: fetch, addItineraryItem, deleteItineraryItem, updateItineraryItem, deleteExpense, updateExpense, inviteMember, updateBudgets, addExpense }
 }

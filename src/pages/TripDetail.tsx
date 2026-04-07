@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Plus, Trash2, UserPlus, Plane, UtensilsCrossed, Star, Home, MoreHorizontal } from 'lucide-react'
+import { Plus, Trash2, Pencil, UserPlus, Plane, UtensilsCrossed, Star, Home, MoreHorizontal } from 'lucide-react'
 import TopNav from '../components/TopNav'
 import TripBanner from '../components/TripBanner'
 import ProgressBar from '../components/ProgressBar'
@@ -9,7 +9,7 @@ import CategoryIcon from '../components/CategoryIcon'
 import { useTripDetail } from '../hooks/useTripDetail'
 import { useAuth } from '../hooks/useAuth'
 import { C, CATEGORY_META, fmtDate, fmtDateFull } from '../lib/constants'
-import { CATEGORIES, ITINERARY_TYPES, type Category, type ItineraryItem, type ItineraryItemType } from '../lib/types'
+import { CATEGORIES, ITINERARY_TYPES, type Category, type Expense, type ItineraryItem, type ItineraryItemType } from '../lib/types'
 
 // ─── Itinerary Type Meta ───────────────────────────────────────────────────────
 const TYPE_META: Record<ItineraryItemType, { icon: React.FC<{ size: number; color: string }>, color: string; pale: string }> = {
@@ -25,10 +25,12 @@ function ItineraryTab({
   trip,
   onAddActivity,
   onDeleteItem,
+  onEditItem,
 }: {
   trip: ReturnType<typeof useTripDetail>['trip'] & object
   onAddActivity: (date?: string) => void
   onDeleteItem: (id: string) => void
+  onEditItem: (item: ItineraryItem) => void
 }) {
   if (!trip) return null
 
@@ -145,6 +147,7 @@ function ItineraryTab({
                     isToday={isToday}
                     linkedTotal={linkedTotal}
                     onDelete={() => onDeleteItem(item.id)}
+                    onEdit={() => onEditItem(item)}
                   />
                 )
               })}
@@ -185,13 +188,15 @@ function ActivityCard({
   isToday,
   linkedTotal,
   onDelete,
+  onEdit,
 }: {
   item: ItineraryItem
   isToday: boolean
   linkedTotal: number
   onDelete: () => void
+  onEdit: () => void
 }) {
-  const [showDelete, setShowDelete] = useState(false)
+  const [showActions, setShowActions] = useState(false)
 
   return (
     <div
@@ -205,8 +210,8 @@ function ActivityCard({
         border: `1px solid ${isToday ? C.terraPale : 'rgba(26,26,46,0.06)'}`,
         boxShadow: '0 1px 5px rgba(26,26,46,0.05)',
       }}
-      onMouseEnter={() => setShowDelete(true)}
-      onMouseLeave={() => setShowDelete(false)}
+      onMouseEnter={() => setShowActions(true)}
+      onMouseLeave={() => setShowActions(false)}
     >
       {/* Type icon */}
       {(() => {
@@ -238,22 +243,21 @@ function ActivityCard({
             {item.time.slice(0, 5).replace(/^0/, '')}
           </p>
         )}
-        {showDelete && (
-          <button
-            onClick={e => { e.stopPropagation(); onDelete() }}
-            style={{
-              background: C.dangerPale,
-              border: 'none',
-              borderRadius: 6,
-              padding: '4px 6px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              color: C.danger,
-            }}
-          >
-            <Trash2 size={13} />
-          </button>
+        {showActions && (
+          <div style={{ display: 'flex', gap: 4 }}>
+            <button
+              onClick={e => { e.stopPropagation(); onEdit() }}
+              style={{ background: 'rgba(26,26,46,0.06)', border: 'none', borderRadius: 6, padding: '4px 6px', cursor: 'pointer', display: 'flex', alignItems: 'center', color: C.inkMuted }}
+            >
+              <Pencil size={13} />
+            </button>
+            <button
+              onClick={e => { e.stopPropagation(); onDelete() }}
+              style={{ background: C.dangerPale, border: 'none', borderRadius: 6, padding: '4px 6px', cursor: 'pointer', display: 'flex', alignItems: 'center', color: C.danger }}
+            >
+              <Trash2 size={13} />
+            </button>
+          </div>
         )}
       </div>
     </div>
@@ -358,11 +362,13 @@ function BudgetTab({
   onEditBudgets,
   onLogExpense,
   onDeleteExpense,
+  onEditExpense,
 }: {
   trip: ReturnType<typeof useTripDetail>['trip'] & object
   onEditBudgets: () => void
   onLogExpense: () => void
   onDeleteExpense: (id: string) => void
+  onEditExpense: (exp: Expense) => void
 }) {
   if (!trip) return null
 
@@ -532,10 +538,16 @@ function BudgetTab({
                   {exp.paid_by ? ` · ${trip.trip_members.find(m => m.user_id === exp.paid_by)?.profiles.display_name ?? 'Unknown'}` : ''}
                 </p>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                 <p style={{ fontSize: 14, fontWeight: 600, color: C.terra, whiteSpace: 'nowrap' }}>
                   ${exp.amount.toLocaleString()}
                 </p>
+                <button
+                  onClick={() => onEditExpense(exp)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: C.inkMuted, display: 'flex' }}
+                >
+                  <Pencil size={13} />
+                </button>
                 <button
                   onClick={() => onDeleteExpense(exp.id)}
                   style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: C.inkMuted, display: 'flex' }}
@@ -557,6 +569,7 @@ function AddActivityForm({
   tripStart,
   tripEnd,
   prefilledDate,
+  initialValues,
   onClose,
   onSave,
 }: {
@@ -564,17 +577,18 @@ function AddActivityForm({
   tripStart: string
   tripEnd: string
   prefilledDate?: string
+  initialValues?: ItineraryItem
   onClose: () => void
   onSave: (item: { date: string; time?: string; title: string; location?: string; notes?: string; type?: string }) => Promise<unknown>
 }) {
-  const defaultDate = prefilledDate || new Date().toISOString().split('T')[0]
+  const defaultDate = initialValues?.date ?? prefilledDate ?? new Date().toISOString().split('T')[0]
   const [form, setForm] = useState({
     date: defaultDate < tripStart ? tripStart : defaultDate > tripEnd ? tripStart : defaultDate,
-    time: '',
-    title: '',
-    location: '',
-    notes: '',
-    type: 'Activity' as ItineraryItemType,
+    time: initialValues?.time ?? '',
+    title: initialValues?.title ?? '',
+    location: initialValues?.location ?? '',
+    notes: initialValues?.notes ?? '',
+    type: (initialValues?.type ?? 'Activity') as ItineraryItemType,
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -717,7 +731,7 @@ function AddActivityForm({
             fontFamily: 'inherit',
           }}
         >
-          {saving ? 'Saving…' : 'Save activity'}
+          {saving ? 'Saving…' : initialValues ? 'Save changes' : 'Save activity'}
         </button>
       </div>
     </div>
@@ -885,19 +899,21 @@ function LogExpenseForm({
   onClose,
   onSave,
   currentUserId,
+  initialValues,
 }: {
   trip: ReturnType<typeof useTripDetail>['trip'] & object
   onClose: () => void
   onSave: (expense: { category: string; amount: number; description: string; date: string; paid_by: string; itinerary_item_id?: string }) => Promise<unknown>
   currentUserId: string
+  initialValues?: Expense
 }) {
   const [form, setForm] = useState({
-    category: 'Food' as Category,
-    amount: '',
-    description: '',
-    date: new Date().toISOString().split('T')[0],
-    paid_by: currentUserId,
-    itinerary_item_id: '',
+    category: (initialValues?.category ?? 'Food') as Category,
+    amount: initialValues ? String(initialValues.amount) : '',
+    description: initialValues?.description ?? '',
+    date: initialValues?.date ?? new Date().toISOString().split('T')[0],
+    paid_by: initialValues?.paid_by ?? currentUserId,
+    itinerary_item_id: initialValues?.itinerary_item_id ?? '',
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -998,7 +1014,7 @@ function LogExpenseForm({
         </button>
         <button onClick={handleSave} disabled={saving}
           style={{ flex: 2, padding: '10px', borderRadius: 8, background: saving ? C.inkMuted : C.terra, color: C.white, border: 'none', fontSize: 13, fontWeight: 600, cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit' }}>
-          {saving ? 'Saving…' : 'Log expense'}
+          {saving ? 'Saving…' : initialValues ? 'Save changes' : 'Log expense'}
         </button>
       </div>
     </div>
@@ -1011,15 +1027,17 @@ export default function TripDetail() {
   const navigate = useNavigate()
   const { user } = useAuth()
 
-  const { trip, loading, error, addItineraryItem, deleteItineraryItem, deleteExpense, inviteMember, updateBudgets, addExpense } =
+  const { trip, loading, error, addItineraryItem, deleteItineraryItem, updateItineraryItem, deleteExpense, updateExpense, inviteMember, updateBudgets, addExpense } =
     useTripDetail(id!)
 
   const [tab, setTab] = useState<'dashboard' | 'itinerary' | 'budget'>('dashboard')
   const [showAddActivity, setShowAddActivity] = useState(false)
   const [activityDate, setActivityDate] = useState<string | undefined>(undefined)
+  const [editingItem, setEditingItem] = useState<ItineraryItem | null>(null)
   const [showInvite, setShowInvite] = useState(false)
   const [showEditBudgets, setShowEditBudgets] = useState(false)
   const [showLogExpense, setShowLogExpense] = useState(false)
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
 
   const openAddActivity = (date?: string) => {
     setActivityDate(date)
@@ -1210,6 +1228,7 @@ export default function TripDetail() {
             trip={trip}
             onAddActivity={openAddActivity}
             onDeleteItem={deleteItineraryItem}
+            onEditItem={item => setEditingItem(item)}
           />
         )}
         {tab === 'budget' && (
@@ -1218,6 +1237,7 @@ export default function TripDetail() {
             onEditBudgets={() => setShowEditBudgets(true)}
             onLogExpense={() => setShowLogExpense(true)}
             onDeleteExpense={deleteExpense}
+            onEditExpense={exp => setEditingExpense(exp)}
           />
         )}
       </div>
@@ -1257,6 +1277,33 @@ export default function TripDetail() {
             trip={trip}
             onClose={() => setShowEditBudgets(false)}
             onSave={updateBudgets}
+          />
+        )}
+      </Sheet>
+
+      {/* Edit itinerary item sheet */}
+      <Sheet open={!!editingItem} onClose={() => setEditingItem(null)} title="Edit activity">
+        {editingItem && (
+          <AddActivityForm
+            tripId={trip.id}
+            tripStart={trip.start_date}
+            tripEnd={trip.end_date}
+            initialValues={editingItem}
+            onClose={() => setEditingItem(null)}
+            onSave={updates => updateItineraryItem(editingItem.id, updates as Partial<ItineraryItem>)}
+          />
+        )}
+      </Sheet>
+
+      {/* Edit expense sheet */}
+      <Sheet open={!!editingExpense} onClose={() => setEditingExpense(null)} title="Edit expense">
+        {editingExpense && (
+          <LogExpenseForm
+            trip={trip}
+            onClose={() => setEditingExpense(null)}
+            onSave={updates => updateExpense(editingExpense.id, updates as Partial<Expense>)}
+            currentUserId={user?.id ?? ''}
+            initialValues={editingExpense}
           />
         )}
       </Sheet>
