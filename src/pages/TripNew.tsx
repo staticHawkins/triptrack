@@ -1,11 +1,9 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import TopNav from '../components/TopNav'
-import CategoryIcon from '../components/CategoryIcon'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
-import { C, CATEGORY_META } from '../lib/constants'
-import { CATEGORIES, type Category } from '../lib/types'
+import { C } from '../lib/constants'
 
 export default function TripNew() {
   const navigate = useNavigate()
@@ -13,10 +11,7 @@ export default function TripNew() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const [form, setForm] = useState({ name: '', destination: '', start: '', end: '' })
-  const [budgets, setBudgets] = useState<Record<Category, string>>(
-    Object.fromEntries(CATEGORIES.map(c => [c, ''])) as Record<Category, string>
-  )
+  const [form, setForm] = useState({ name: '', destination: '', start: '', end: '', budget: '' })
 
   const set = (k: keyof typeof form, v: string) => setForm(f => ({ ...f, [k]: v }))
 
@@ -39,6 +34,7 @@ export default function TripNew() {
         start_date: form.start,
         end_date: form.end,
         created_by: user.id,
+        budget: form.budget ? parseFloat(form.budget) : null,
       })
       .select()
       .single()
@@ -62,20 +58,6 @@ export default function TripNew() {
       setError(memberErr.message)
       setSaving(false)
       return
-    }
-
-    // 3. Insert non-zero category budgets
-    const budgetRows = CATEGORIES
-      .filter(c => budgets[c] && Number(budgets[c]) > 0)
-      .map(c => ({ trip_id: tripId, category: c, amount: Number(budgets[c]) }))
-
-    if (budgetRows.length > 0) {
-      const { error: budgetErr } = await supabase.from('category_budgets').insert(budgetRows)
-      if (budgetErr) {
-        setError(budgetErr.message)
-        setSaving(false)
-        return
-      }
     }
 
     navigate(`/trips/${tripId}`)
@@ -150,61 +132,19 @@ export default function TripNew() {
           </Field>
         </div>
 
-        <p
-          style={{
-            fontSize: 11,
-            fontWeight: 600,
-            textTransform: 'uppercase',
-            letterSpacing: '0.07em',
-            color: C.inkMuted,
-            marginBottom: 10,
-            marginTop: 4,
-          }}
-        >
-          Category Budgets
-        </p>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 28 }}>
-          {CATEGORIES.map(cat => {
-            const meta = CATEGORY_META[cat]
-            return (
-              <div
-                key={cat}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                  background: C.white,
-                  border: '1px solid rgba(26,26,46,0.08)',
-                  borderRadius: 8,
-                  padding: '9px 13px',
-                }}
-              >
-                <span style={{ color: meta.color, display: 'flex', flexShrink: 0 }}>
-                  <CategoryIcon category={cat} color={meta.color} size={16} />
-                </span>
-                <span style={{ fontSize: 13, color: C.ink, width: 84 }}>{cat}</span>
-                <span style={{ fontSize: 13, color: C.inkMuted, flexShrink: 0 }}>$</span>
-                <input
-                  type="number"
-                  min="0"
-                  placeholder="—"
-                  value={budgets[cat]}
-                  onChange={e => setBudgets(b => ({ ...b, [cat]: e.target.value }))}
-                  style={{
-                    flex: 1,
-                    border: 'none',
-                    outline: 'none',
-                    fontSize: 14,
-                    color: C.ink,
-                    fontFamily: 'inherit',
-                    background: 'transparent',
-                  }}
-                />
-              </div>
-            )
-          })}
-        </div>
+        <Field label="Total budget (optional)">
+          <div style={{ position: 'relative' }}>
+            <span style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', fontSize: 14, color: C.inkMuted }}>$</span>
+            <input
+              type="number"
+              min="0"
+              placeholder="e.g. 3000"
+              value={form.budget}
+              onChange={e => set('budget', e.target.value)}
+              style={{ ...inputStyle, paddingLeft: 26 }}
+            />
+          </div>
+        </Field>
 
         <button
           onClick={handleSubmit}

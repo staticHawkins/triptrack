@@ -19,15 +19,9 @@ export interface Trip {
   destination: string
   start_date: string
   end_date: string
+  budget: number | null
   created_by: string
   created_at: string
-}
-
-export interface CategoryBudget {
-  id: string
-  trip_id: string
-  category: Category
-  amount: number
 }
 
 export interface TripMember {

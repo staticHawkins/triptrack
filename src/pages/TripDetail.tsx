@@ -7,10 +7,12 @@ import ProgressBar from '../components/ProgressBar'
 import Sheet from '../components/Sheet'
 import CategoryIcon from '../components/CategoryIcon'
 import PlacesAutocomplete from '../components/PlacesAutocomplete'
+import BudgetInsights from '../components/BudgetInsights'
 import { useTripDetail } from '../hooks/useTripDetail'
 import { useAuth } from '../hooks/useAuth'
 import { C, CATEGORY_META, fmtDate, fmtDateFull } from '../lib/constants'
 import { CATEGORIES, ITINERARY_TYPES, type Category, type Expense, type ItineraryItem, type ItineraryItemType } from '../lib/types'
+import { computeBudgetInsights } from '../lib/budgetInsights'
 
 // ─── Itinerary Type Meta ───────────────────────────────────────────────────────
 const TYPE_META: Record<ItineraryItemType, { icon: React.FC<{ size: number; color: string }>, color: string; pale: string }> = {
@@ -267,13 +269,14 @@ function EditTripForm({
 }: {
   trip: ReturnType<typeof useTripDetail>['trip'] & object
   onClose: () => void
-  onSave: (updates: { name: string; destination: string; start_date: string; end_date: string }) => Promise<unknown>
+  onSave: (updates: { name: string; destination: string; start_date: string; end_date: string; budget: number | null }) => Promise<unknown>
 }) {
   const [form, setForm] = useState({
     name: trip.name,
     destination: trip.destination,
     start_date: trip.start_date,
     end_date: trip.end_date,
+    budget: trip.budget?.toString() ?? '',
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -284,7 +287,13 @@ function EditTripForm({
     if (!form.destination.trim()) { setError('Destination is required.'); return }
     if (form.end_date < form.start_date) { setError('End date must be after start date.'); return }
     setSaving(true)
-    const err = await onSave({ name: form.name.trim(), destination: form.destination.trim(), start_date: form.start_date, end_date: form.end_date })
+    const err = await onSave({
+      name: form.name.trim(),
+      destination: form.destination.trim(),
+      start_date: form.start_date,
+      end_date: form.end_date,
+      budget: form.budget ? parseFloat(form.budget) : null,
+    })
     if (err) { setError((err as { message: string }).message); setSaving(false); return }
     onClose()
   }
@@ -308,6 +317,19 @@ function EditTripForm({
       <SheetField label="End date">
         <input type="date" value={form.end_date} min={form.start_date} onChange={e => set('end_date', e.target.value)} style={sheetInputStyle} />
       </SheetField>
+      <SheetField label="Total budget (optional)">
+        <div style={{ position: 'relative' }}>
+          <span style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', fontSize: 14, color: C.inkMuted }}>$</span>
+          <input
+            type="number"
+            min="0"
+            placeholder="e.g. 3000"
+            value={form.budget}
+            onChange={e => set('budget', e.target.value)}
+            style={{ ...sheetInputStyle, paddingLeft: 26 }}
+          />
+        </div>
+      </SheetField>
       <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
         <button onClick={onClose} style={{ flex: 1, padding: '10px', borderRadius: 8, border: '1px solid rgba(26,26,46,0.15)', background: C.white, fontSize: 13, fontWeight: 500, color: C.inkMuted, cursor: 'pointer', fontFamily: 'inherit' }}>
           Cancel
@@ -320,108 +342,14 @@ function EditTripForm({
   )
 }
 
-// ─── Edit Budgets Form ──────────────────────────────────────────────────────────
-function EditBudgetsForm({
-  trip,
-  onClose,
-  onSave,
-}: {
-  trip: ReturnType<typeof useTripDetail>['trip'] & object
-  onClose: () => void
-  onSave: (budgets: Partial<Record<string, number>>) => Promise<unknown>
-}) {
-  const [values, setValues] = useState<Record<string, string>>(
-    Object.fromEntries(
-      CATEGORIES.map(cat => [
-        cat,
-        String(trip.category_budgets.find(b => b.category === cat)?.amount ?? ''),
-      ])
-    )
-  )
-  const [saving, setSaving] = useState(false)
-
-  const handleSave = async () => {
-    setSaving(true)
-    const budgets = Object.fromEntries(
-      CATEGORIES.map(cat => [cat, Number(values[cat]) || 0])
-    )
-    await onSave(budgets)
-    setSaving(false)
-    onClose()
-  }
-
-  return (
-    <div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 24 }}>
-        {CATEGORIES.map(cat => {
-          const meta = CATEGORY_META[cat]
-          return (
-            <div
-              key={cat}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                background: C.sandDark,
-                border: '1px solid rgba(26,26,46,0.08)',
-                borderRadius: 8,
-                padding: '9px 13px',
-              }}
-            >
-              <span style={{ color: meta.color, display: 'flex', flexShrink: 0 }}>
-                <CategoryIcon category={cat as Category} color={meta.color} size={16} />
-              </span>
-              <span style={{ fontSize: 13, color: C.ink, width: 84 }}>{cat}</span>
-              <span style={{ fontSize: 13, color: C.inkMuted, flexShrink: 0 }}>$</span>
-              <input
-                type="number"
-                min="0"
-                placeholder="—"
-                value={values[cat]}
-                onChange={e => setValues(v => ({ ...v, [cat]: e.target.value }))}
-                style={{
-                  flex: 1,
-                  border: 'none',
-                  outline: 'none',
-                  fontSize: 14,
-                  color: C.ink,
-                  fontFamily: 'inherit',
-                  background: 'transparent',
-                }}
-              />
-            </div>
-          )
-        })}
-      </div>
-      <div style={{ display: 'flex', gap: 10 }}>
-        <button
-          onClick={onClose}
-          style={{ flex: 1, padding: '10px', borderRadius: 8, border: '1px solid rgba(26,26,46,0.15)', background: C.white, fontSize: 13, fontWeight: 500, color: C.inkMuted, cursor: 'pointer', fontFamily: 'inherit' }}
-        >
-          Cancel
-        </button>
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          style={{ flex: 2, padding: '10px', borderRadius: 8, background: saving ? C.inkMuted : C.terra, color: C.white, border: 'none', fontSize: 13, fontWeight: 600, cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit' }}
-        >
-          {saving ? 'Saving…' : 'Save budgets'}
-        </button>
-      </div>
-    </div>
-  )
-}
-
 // ─── Budget Tab ─────────────────────────────────────────────────────────────────
 function BudgetTab({
   trip,
-  onEditBudgets,
   onLogExpense,
   onDeleteExpense,
   onEditExpense,
 }: {
   trip: ReturnType<typeof useTripDetail>['trip'] & object
-  onEditBudgets: () => void
   onLogExpense: () => void
   onDeleteExpense: (id: string) => void
   onEditExpense: (exp: Expense) => void
@@ -435,28 +363,28 @@ function BudgetTab({
     return acc
   }, {})
 
+  const todayMs = new Date().setHours(12, 0, 0, 0)
+  const startMs = new Date(trip.start_date + 'T12:00:00').getTime()
+  const endMs   = new Date(trip.end_date   + 'T12:00:00').getTime()
+  const dayNumber      = Math.round((todayMs - startMs) / 86400000) + 1
+  const daysLeftInTrip = Math.round((endMs   - todayMs) / 86400000)
+
+  const insights = trip.status === 'active' && trip.budget
+    ? computeBudgetInsights({ totalBudget: trip.budget, totalSpent: trip.totalSpent, expenses: trip.expenses, start_date: trip.start_date, dayNumber, daysLeftInTrip })
+    : []
+
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-        <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: C.inkMuted }}>
-          By Category
-        </p>
-        <button
-          onClick={onEditBudgets}
-          style={{ fontSize: 12, fontWeight: 500, color: C.terra, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
-        >
-          Edit budgets
-        </button>
-      </div>
+      <BudgetInsights insights={insights} />
+
+      <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: C.inkMuted, marginBottom: 10 }}>
+        By Category
+      </p>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 28 }}>
         {CATEGORIES.map(cat => {
           const meta = CATEGORY_META[cat]
-          const budget = trip.category_budgets.find(b => b.category === cat)?.amount ?? 0
           const spent = catSpent[cat] || 0
-          const pct = budget > 0 ? Math.min(100, (spent / budget) * 100) : 0
-          const over = budget > 0 && spent > budget
-          const barColor = over ? C.danger : meta.barColor
 
           return (
             <div
@@ -466,33 +394,18 @@ function BudgetTab({
                 borderRadius: 8,
                 padding: '12px 14px',
                 border: '1px solid rgba(26,26,46,0.06)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
               }}
             >
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  marginBottom: budget > 0 ? 8 : 0,
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <CategoryIcon category={cat as Category} color={over ? C.danger : meta.color} size={15} />
-                  <span style={{ fontSize: 14, fontWeight: 500, color: C.ink }}>{cat}</span>
-                </div>
-                <div style={{ fontSize: 12, color: C.inkMuted, display: 'flex', gap: 12 }}>
-                  {budget > 0 && <span>${budget.toLocaleString()} budget</span>}
-                  <span style={{ fontWeight: 600, color: over ? C.danger : C.ink }}>
-                    ${spent.toLocaleString()} spent
-                  </span>
-                </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <CategoryIcon category={cat as Category} color={meta.color} size={15} />
+                <span style={{ fontSize: 14, fontWeight: 500, color: C.ink }}>{cat}</span>
               </div>
-              {budget > 0 && <ProgressBar pct={pct} color={barColor} height={4} />}
-              {over && (
-                <p style={{ fontSize: 11, color: C.danger, marginTop: 5, fontWeight: 600 }}>
-                  ${(spent - budget).toLocaleString()} over budget
-                </p>
-              )}
+              <span style={{ fontSize: 13, fontWeight: 600, color: spent > 0 ? C.ink : C.inkMuted }}>
+                {spent > 0 ? `$${spent.toLocaleString()}` : '—'}
+              </span>
             </div>
           )
         })}
@@ -1163,7 +1076,7 @@ export default function TripDetail() {
   const navigate = useNavigate()
   const { user } = useAuth()
 
-  const { trip, loading, error, updateTrip, addItineraryItem, deleteItineraryItem, updateItineraryItem, deleteExpense, updateExpense, inviteMember, updateBudgets, addExpense } =
+  const { trip, loading, error, updateTrip, addItineraryItem, deleteItineraryItem, updateItineraryItem, deleteExpense, updateExpense, inviteMember, addExpense } =
     useTripDetail(id!)
 
   const [tab, setTab] = useState<'dashboard' | 'itinerary' | 'budget'>('dashboard')
@@ -1171,7 +1084,7 @@ export default function TripDetail() {
   const [activityDate, setActivityDate] = useState<string | undefined>(undefined)
   const [editingItem, setEditingItem] = useState<ItineraryItem | null>(null)
   const [showInvite, setShowInvite] = useState(false)
-  const [showEditBudgets, setShowEditBudgets] = useState(false)
+
   const [showLogExpense, setShowLogExpense] = useState(false)
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
   const [showEditTrip, setShowEditTrip] = useState(false)
@@ -1419,7 +1332,6 @@ export default function TripDetail() {
         {tab === 'budget' && (
           <BudgetTab
             trip={trip}
-            onEditBudgets={() => setShowEditBudgets(true)}
             onLogExpense={() => setShowLogExpense(true)}
             onDeleteExpense={deleteExpense}
             onEditExpense={exp => setEditingExpense(exp)}
@@ -1451,17 +1363,6 @@ export default function TripDetail() {
             onClose={() => setShowLogExpense(false)}
             onSave={addExpense}
             currentUserId={user?.id ?? ''}
-          />
-        )}
-      </Sheet>
-
-      {/* Edit budgets sheet */}
-      <Sheet open={showEditBudgets} onClose={() => setShowEditBudgets(false)} title="Edit Budgets">
-        {showEditBudgets && (
-          <EditBudgetsForm
-            trip={trip}
-            onClose={() => setShowEditBudgets(false)}
-            onSave={updateBudgets}
           />
         )}
       </Sheet>

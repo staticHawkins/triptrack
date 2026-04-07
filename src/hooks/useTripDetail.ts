@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { getTripStatus } from '../lib/constants'
-import type { Trip, CategoryBudget, TripMember, Profile, ItineraryItem, Expense } from '../lib/types'
+import type { Trip, TripMember, Profile, ItineraryItem, Expense } from '../lib/types'
 
 export interface TripMemberWithProfile extends TripMember {
   profiles: Pick<Profile, 'display_name' | 'email'>
@@ -11,7 +11,6 @@ export interface TripDetail extends Trip {
   status: 'active' | 'upcoming' | 'completed'
   totalBudget: number
   totalSpent: number
-  category_budgets: CategoryBudget[]
   trip_members: TripMemberWithProfile[]
   itinerary_items: ItineraryItem[]
   expenses: Expense[]
@@ -29,7 +28,6 @@ export function useTripDetail(tripId: string) {
       .from('trips')
       .select(`
         *,
-        category_budgets (*),
         trip_members (user_id, role, joined_at, profiles (display_name, email)),
         itinerary_items (*),
         expenses (*)
@@ -39,15 +37,12 @@ export function useTripDetail(tripId: string) {
 
     if (err) { setError(err.message); setLoading(false); return }
 
-    const raw = data as TripDetail & {
-      expenses: Expense[]
-      category_budgets: CategoryBudget[]
-    }
+    const raw = data as TripDetail & { expenses: Expense[] }
 
     setTrip({
       ...raw,
       status: getTripStatus(raw.start_date, raw.end_date),
-      totalBudget: raw.category_budgets.reduce((s, b) => s + b.amount, 0),
+      totalBudget: raw.budget ?? 0,
       totalSpent: raw.expenses.reduce((s, e) => s + e.amount, 0),
       itinerary_items: [...raw.itinerary_items].sort((a, b) => {
         const dateCompare = a.date.localeCompare(b.date)
@@ -109,7 +104,7 @@ export function useTripDetail(tripId: string) {
     return error
   }, [fetch])
 
-  const updateTrip = useCallback(async (updates: Partial<Pick<Trip, 'name' | 'destination' | 'start_date' | 'end_date'>>) => {
+  const updateTrip = useCallback(async (updates: Partial<Pick<Trip, 'name' | 'destination' | 'start_date' | 'end_date' | 'budget'>>) => {
     const { error } = await supabase.from('trips').update(updates).eq('id', tripId)
     if (!error) fetch()
     return error
@@ -134,23 +129,11 @@ export function useTripDetail(tripId: string) {
     return error
   }, [tripId, fetch])
 
-  const updateBudgets = useCallback(async (budgets: Partial<Record<string, number>>) => {
-    const rows = Object.entries(budgets)
-      .map(([category, amount]) => ({ trip_id: tripId, category, amount: amount ?? 0 }))
-
-    const { error } = await supabase
-      .from('category_budgets')
-      .upsert(rows, { onConflict: 'trip_id,category' })
-
-    if (!error) fetch()
-    return error
-  }, [tripId, fetch])
-
   const inviteMember = useCallback(async (email: string) => {
     const { data, error } = await supabase.rpc('invite_to_trip', { p_trip_id: tripId, p_email: email })
     if (!error) fetch()
     return { result: data as string | null, error }
   }, [tripId, fetch])
 
-  return { trip, loading, error, refetch: fetch, updateTrip, addItineraryItem, deleteItineraryItem, updateItineraryItem, deleteExpense, updateExpense, inviteMember, updateBudgets, addExpense }
+  return { trip, loading, error, refetch: fetch, updateTrip, addItineraryItem, deleteItineraryItem, updateItineraryItem, deleteExpense, updateExpense, inviteMember, addExpense }
 }
