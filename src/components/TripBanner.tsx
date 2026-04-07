@@ -22,9 +22,11 @@ export default function TripBanner({ destination, height = 140, children }: Prop
     const key = import.meta.env.VITE_UNSPLASH_ACCESS_KEY
     if (!key) return
 
+    const controller = new AbortController()
+
     fetch(
       `https://api.unsplash.com/search/photos?query=${encodeURIComponent(destination + ' travel landscape')}&per_page=1&orientation=landscape`,
-      { headers: { Authorization: `Client-ID ${key}` } }
+      { headers: { Authorization: `Client-ID ${key}` }, signal: controller.signal }
     )
       .then(r => r.json())
       .then(data => {
@@ -32,9 +34,12 @@ export default function TripBanner({ destination, height = 140, children }: Prop
         cache[destination] = url
         setPhotoUrl(url)
       })
-      .catch(() => {
+      .catch(err => {
+        if (err.name === 'AbortError') return
         cache[destination] = null
       })
+
+    return () => controller.abort()
   }, [destination])
 
   return (
