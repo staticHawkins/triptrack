@@ -18,22 +18,19 @@ export default function LoginPage() {
         {/* Logo mark */}
         <div
           className="w-16 h-16 rounded-[18px] mx-auto mb-7 flex items-center justify-center"
-          style={{ background: 'linear-gradient(135deg, #C4622D, #E8895A)' }}
+          style={{ background: '#1A1A2E', border: '1.5px solid rgba(232,137,90,0.25)' }}
         >
-          {/* Compass icon */}
-          <svg
-            width="28"
-            height="28"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="white"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+          <span
+            style={{
+              fontFamily: "Georgia, 'Times New Roman', serif",
+              fontSize: '38px',
+              fontWeight: 700,
+              color: '#E8895A',
+              lineHeight: 1,
+            }}
           >
-            <circle cx="12" cy="12" r="10" />
-            <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
-          </svg>
+            T
+          </span>
         </div>
 
         {/* Heading */}
