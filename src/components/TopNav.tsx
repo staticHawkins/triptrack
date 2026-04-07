@@ -31,7 +31,7 @@ export default function TopNav({ onBack, backLabel = 'Back', action }: TopNavPro
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const avatar = user?.user_metadata?.picture as string | undefined
+  const avatar = (user?.user_metadata?.avatar_url ?? user?.user_metadata?.picture) as string | undefined
   const initials = user?.email?.slice(0, 1).toUpperCase() ?? '?'
   const name = user?.user_metadata?.full_name as string | undefined
   const email = user?.email ?? ''
@@ -63,8 +63,7 @@ export default function TopNav({ onBack, backLabel = 'Back', action }: TopNavPro
       <div className="flex items-center gap-3">
         {action}
 
-        {!onBack && (
-          <div ref={ref} style={{ position: 'relative' }}>
+        <div ref={ref} style={{ position: 'relative' }}>
             {/* Avatar button */}
             <button
               onClick={() => setOpen(o => !o)}
@@ -125,7 +124,6 @@ export default function TopNav({ onBack, backLabel = 'Back', action }: TopNavPro
               </div>
             )}
           </div>
-        )}
       </div>
     </div>
   )
