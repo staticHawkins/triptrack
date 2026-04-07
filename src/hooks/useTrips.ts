@@ -20,10 +20,10 @@ export function useTrips() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const fetch = useCallback(async () => {
+  const fetch = useCallback(async (signal?: AbortSignal) => {
     setLoading(true)
     setError(null)
-    const { data, error: err } = await supabase
+    const query = supabase
       .from('trips')
       .select(`
         *,
@@ -32,6 +32,11 @@ export function useTrips() {
       `)
       .order('start_date', { ascending: false })
 
+    if (signal) query.abortSignal(signal)
+
+    const { data, error: err } = await query
+    if (signal?.aborted) return
+
     if (err) { setError(err.message); setLoading(false); return }
 
     const summaries: TripSummary[] = (data as RawTrip[]).map(t => ({
@@ -39,14 +44,18 @@ export function useTrips() {
       status: getTripStatus(t.start_date, t.end_date),
       totalBudget: t.budget ?? 0,
       totalSpent: t.expenses.reduce((s, e) => s + e.amount, 0),
-      members: t.trip_members.map(m => m.profiles),
+      members: t.trip_members.map(m => m.profiles).filter(Boolean),
     }))
 
     setTrips(summaries)
     setLoading(false)
   }, [])
 
-  useEffect(() => { fetch() }, [fetch])
+  useEffect(() => {
+    const controller = new AbortController()
+    fetch(controller.signal)
+    return () => controller.abort()
+  }, [fetch])
 
   return { trips, loading, error, refetch: fetch }
 }
