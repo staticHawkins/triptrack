@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Plus, Trash2, Pencil, UserPlus, Plane, UtensilsCrossed, Star, Home, MoreHorizontal } from 'lucide-react'
+import { Plus, Trash2, UserPlus, Plane, UtensilsCrossed, Star, Home, MoreHorizontal } from 'lucide-react'
 import TopNav from '../components/TopNav'
 import TripBanner from '../components/TripBanner'
 import ProgressBar from '../components/ProgressBar'
@@ -200,6 +200,7 @@ function ActivityCard({
 
   return (
     <div
+      onClick={onEdit}
       style={{
         background: C.white,
         borderRadius: 8,
@@ -209,6 +210,7 @@ function ActivityCard({
         gap: 12,
         border: `1px solid ${isToday ? C.terraPale : 'rgba(26,26,46,0.06)'}`,
         boxShadow: '0 1px 5px rgba(26,26,46,0.05)',
+        cursor: 'pointer',
       }}
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
@@ -244,20 +246,12 @@ function ActivityCard({
           </p>
         )}
         {showActions && (
-          <div style={{ display: 'flex', gap: 4 }}>
-            <button
-              onClick={e => { e.stopPropagation(); onEdit() }}
-              style={{ background: 'rgba(26,26,46,0.06)', border: 'none', borderRadius: 6, padding: '4px 6px', cursor: 'pointer', display: 'flex', alignItems: 'center', color: C.inkMuted }}
-            >
-              <Pencil size={13} />
-            </button>
-            <button
-              onClick={e => { e.stopPropagation(); onDelete() }}
-              style={{ background: C.dangerPale, border: 'none', borderRadius: 6, padding: '4px 6px', cursor: 'pointer', display: 'flex', alignItems: 'center', color: C.danger }}
-            >
-              <Trash2 size={13} />
-            </button>
-          </div>
+          <button
+            onClick={e => { e.stopPropagation(); onDelete() }}
+            style={{ background: C.dangerPale, border: 'none', borderRadius: 6, padding: '4px 6px', cursor: 'pointer', display: 'flex', alignItems: 'center', color: C.danger }}
+          >
+            <Trash2 size={13} />
+          </button>
         )}
       </div>
     </div>
@@ -472,6 +466,7 @@ function BudgetTab({
           return (
             <div
               key={exp.id}
+              onClick={() => onEditExpense(exp)}
               style={{
                 background: C.white,
                 borderRadius: 8,
@@ -479,6 +474,7 @@ function BudgetTab({
                 display: 'flex',
                 gap: 12,
                 border: '1px solid rgba(26,26,46,0.06)',
+                cursor: 'pointer',
               }}
             >
               <div style={{ width: 38, textAlign: 'center', flexShrink: 0 }}>
@@ -543,13 +539,7 @@ function BudgetTab({
                   ${exp.amount.toLocaleString()}
                 </p>
                 <button
-                  onClick={() => onEditExpense(exp)}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: C.inkMuted, display: 'flex' }}
-                >
-                  <Pencil size={13} />
-                </button>
-                <button
-                  onClick={() => onDeleteExpense(exp.id)}
+                  onClick={e => { e.stopPropagation(); onDeleteExpense(exp.id) }}
                   style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: C.inkMuted, display: 'flex' }}
                 >
                   <Trash2 size={14} />
