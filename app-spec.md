@@ -13,10 +13,11 @@ TripTrack is a mobile-friendly web app for planning and tracking multiple trips 
 
 - **Trips list**: Home screen showing all trips the user belongs to — trip name, destination photo, dates, trip status, and a simple budget health indicator (Under budget / Over budget). No numbers on the list — full budget detail lives inside each trip.
 - **Trip creation**: Create a named trip with destination, date range, and per-category budgets.
+- **Trip editing**: Edit trip name, destination, and dates from the trip banner. Per-category budgets are editable from the Budget tab.
 - **Per-category budgets**: Set individual budgets for each category (Food, Transport, Lodging, Activities, Supplies, Other) when creating or editing a trip.
 - **Shared access**: Invite friends/family by email; all members can view and edit the trip.
-- **Itinerary builder**: Add activities to specific days — each with a name, time, location, and optional notes.
-- **Expense logging**: Log expenses with a category, amount, description, date (defaults to today, editable for past expenses), who paid, and an optional link to an itinerary item. Expenses logged before the trip start date are automatically tagged as "Pre-trip" in the UI (e.g. toiletries, travel-size items, gear bought before departure).
+- **Itinerary builder**: Add, edit, and delete activities on specific days — each with a type (Activity | Meal | Transport | Stay | Other), name, time, location, and optional notes.
+- **Expense logging**: Log, edit, and delete expenses with a category, amount, description, date (defaults to today, editable for past expenses), who paid, and an optional link to an itinerary item. Expenses logged before the trip start date are automatically tagged as "Pre-trip" in the UI (e.g. toiletries, travel-size items, gear bought before departure).
 - **Budget tracker**: Per-category breakdown (budget vs. spent vs. remaining per category). The overall Budget / Spent / Remaining summary lives in the trip hero bar, visible from both tabs. No "Planned" total — that concept is removed.
 - **Trip dashboard**: Shows today's itinerary items and a single budget health bar (spent vs. remaining). Category drill-down lives in the Budget tab, not here.
 
@@ -76,7 +77,7 @@ Any member opens the app and lands on the trip dashboard. They see today's sched
 - One trip has many category budgets, itinerary items, expenses, and members.
 
 **CategoryBudget**
-- `id` (uuid), `trip_id` (uuid), `category` (enum: Food | Transport | Lodging | Activities | Other), `amount` (numeric)
+- `id` (uuid), `trip_id` (uuid), `category` (enum: Food | Transport | Lodging | Activities | Supplies | Other), `amount` (numeric)
 - One row per category per trip. Not all categories need a budget set.
 
 **TripMember**
@@ -84,10 +85,23 @@ Any member opens the app and lands on the trip dashboard. They see today's sched
 - Join table connecting users to trips.
 
 **ItineraryItem**
-- `id` (uuid), `trip_id` (uuid), `date` (date), `time` (time, optional), `title` (text), `location` (text, optional), `notes` (text, optional)
+- `id` (uuid), `trip_id` (uuid), `date` (date), `time` (time, optional), `title` (text), `location` (text, optional), `notes` (text, optional), `type` (enum: Activity | Meal | Transport | Stay | Other)
 
 **Expense**
-- `id` (uuid), `trip_id` (uuid), `paid_by` (user id), `amount` (numeric), `category` (enum: Food | Transport | Lodging | Activities | Other), `description` (text), `date` (date — user-specified, defaults to today), `itinerary_item_id` (uuid, optional — links to an ItineraryItem), `created_at` (timestamp)
+- `id` (uuid), `trip_id` (uuid), `paid_by` (user id), `amount` (numeric), `category` (enum: Food | Transport | Lodging | Activities | Supplies | Other), `description` (text), `date` (date — user-specified, defaults to today), `itinerary_item_id` (uuid, optional — links to an ItineraryItem), `created_at` (timestamp)
+
+---
+
+## 7. Routes
+
+| Path | Component | Notes |
+|---|---|---|
+| `/` | → `/trips` | Redirect |
+| `/login` | `LoginPage` | Redirects to `/trips` if already authed |
+| `/trips` | `Trips` | Home screen — trip list |
+| `/trips/new` | `TripNew` | Create trip form |
+| `/trips/:id` | `TripDetail` | Full trip dashboard with Itinerary / Budget tabs |
+| `*` | → `/trips` | Catch-all redirect |
 
 ---
 
@@ -96,21 +110,30 @@ Any member opens the app and lands on the trip dashboard. They see today's sched
 ```
 triptrack/
 ├── src/
-│   ├── pages/              # Top-level route pages
+│   ├── pages/
+│   │   ├── LoginPage.tsx   # Auth screen (email + password)
 │   │   ├── Trips.tsx       # Trips list (home screen)
 │   │   ├── TripNew.tsx     # Create trip (name, dates, category budgets)
-│   │   ├── Dashboard.tsx   # Today's plan + budget snapshot
-│   │   ├── Itinerary.tsx   # Full itinerary view
-│   │   └── Expenses.tsx    # Expense list + add expense
-│   ├── components/         # Shared UI components
+│   │   └── TripDetail.tsx  # Full trip view — Itinerary + Budget tabs
+│   ├── components/
+│   │   ├── TopNav.tsx      # Back button + page title bar
+│   │   ├── TripBanner.tsx  # Destination photo/gradient hero with scrim
+│   │   ├── Sheet.tsx       # Slide-up bottom sheet modal
+│   │   ├── ProgressBar.tsx # Thin horizontal bar (budget/spend)
+│   │   └── CategoryIcon.tsx # SVG icon per expense category
 │   ├── lib/
-│   │   ├── supabase.ts     # Supabase client
-│   │   └── types.ts        # TypeScript types
-│   ├── hooks/              # Custom hooks (useTrip, useExpenses, etc.)
-│   └── main.tsx            # App entry point
+│   │   ├── supabase.ts     # Supabase client singleton
+│   │   ├── types.ts        # All TypeScript interfaces + enums
+│   │   └── constants.ts    # C color palette, CATEGORY_META, fmtDate, fmtDateFull, destinationGradient, getTripStatus
+│   ├── hooks/
+│   │   ├── useAuth.ts      # Supabase Auth session wrapper
+│   │   ├── useTrips.ts     # Trip list + budget summaries
+│   │   └── useTripDetail.ts # Full trip data + real-time subscriptions
+│   └── main.tsx
 ├── index.html
 ├── vite.config.ts
-└── tailwind.config.ts
+└── supabase/
+    └── migrations/         # Database schema migrations
 ```
 
 ---
@@ -128,7 +151,7 @@ triptrack/
 
 ## 10. Claude Code Handoff Notes
 
-- Use Tailwind CSS for all styling — no inline styles or CSS modules.
+- Use inline styles with the `C` color palette from `constants.ts` for all design-system colors — do not use Tailwind for colors or spacing that needs to match the palette. Tailwind utility classes are fine for layout (flex, grid, etc.).
 - Use React Router for navigation.
 - Design mobile-first — all layouts should work well on small screens.
 - Use Supabase real-time subscriptions for live expense/budget updates across shared trips.

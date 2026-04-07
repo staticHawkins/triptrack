@@ -48,6 +48,8 @@ export interface ItineraryItem {
   time: string | null
   title: string
   location: string | null
+  latitude: number | null
+  longitude: number | null
   notes: string | null
   type: ItineraryItemType
   created_at: string

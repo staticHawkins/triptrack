@@ -6,6 +6,7 @@ import TripBanner from '../components/TripBanner'
 import ProgressBar from '../components/ProgressBar'
 import Sheet from '../components/Sheet'
 import CategoryIcon from '../components/CategoryIcon'
+import PlacesAutocomplete from '../components/PlacesAutocomplete'
 import { useTripDetail } from '../hooks/useTripDetail'
 import { useAuth } from '../hooks/useAuth'
 import { C, CATEGORY_META, fmtDate, fmtDateFull } from '../lib/constants'
@@ -630,7 +631,7 @@ function AddActivityForm({
   prefilledDate?: string
   initialValues?: ItineraryItem
   onClose: () => void
-  onSave: (item: { date: string; time?: string; title: string; location?: string; notes?: string; type?: string }) => Promise<unknown>
+  onSave: (item: { date: string; time?: string; title: string; location?: string; latitude?: number; longitude?: number; notes?: string; type?: string }) => Promise<unknown>
 }) {
   const defaultDate = initialValues?.date ?? prefilledDate ?? new Date().toISOString().split('T')[0]
   const [form, setForm] = useState({
@@ -638,6 +639,8 @@ function AddActivityForm({
     time: initialValues?.time ?? '',
     title: initialValues?.title ?? '',
     location: initialValues?.location ?? '',
+    lat: initialValues?.latitude ?? null as number | null,
+    lng: initialValues?.longitude ?? null as number | null,
     notes: initialValues?.notes ?? '',
     type: (initialValues?.type ?? 'Activity') as ItineraryItemType,
   })
@@ -653,6 +656,8 @@ function AddActivityForm({
       time: form.time || undefined,
       title: form.title.trim(),
       location: form.location.trim() || undefined,
+      latitude: form.lat ?? undefined,
+      longitude: form.lng ?? undefined,
       notes: form.notes.trim() || undefined,
       type: form.type,
     })
@@ -731,10 +736,17 @@ function AddActivityForm({
       </SheetField>
 
       <SheetField label="Location (optional)">
-        <input
-          placeholder="e.g. Ginza, Tokyo"
+        <PlacesAutocomplete
           value={form.location}
-          onChange={e => set('location', e.target.value)}
+          onChange={val => set('location', val)}
+          onPlaceSelect={place => {
+            if (place) {
+              setForm(f => ({ ...f, location: place.address, lat: place.lat, lng: place.lng }))
+            } else {
+              setForm(f => ({ ...f, lat: null, lng: null }))
+            }
+          }}
+          placeholder="e.g. Ginza, Tokyo"
           style={sheetInputStyle}
         />
       </SheetField>
@@ -889,16 +901,145 @@ function InviteMemberForm({
   )
 }
 
+// ─── WMO weather code → label ───────────────────────────────────────────────────
+function wmoLabel(code: number): { condition: string; emoji: string } {
+  if (code === 0)                       return { condition: 'Clear sky',    emoji: '☀️'  }
+  if (code <= 2)                        return { condition: 'Partly cloudy', emoji: '⛅'  }
+  if (code === 3)                       return { condition: 'Overcast',      emoji: '☁️'  }
+  if (code <= 48)                       return { condition: 'Foggy',         emoji: '🌫️' }
+  if (code <= 67)                       return { condition: 'Rain',          emoji: '🌧️' }
+  if (code <= 77)                       return { condition: 'Snow',          emoji: '🌨️' }
+  if (code <= 82)                       return { condition: 'Showers',       emoji: '🌦️' }
+  return                                       { condition: 'Thunderstorm',  emoji: '⛈️' }
+}
+
 // ─── Dashboard Tab ──────────────────────────────────────────────────────────────
 function DashboardTab({ trip }: { trip: ReturnType<typeof useTripDetail>['trip'] & object }) {
   const todayStr = new Date().toISOString().split('T')[0]
   const todayItems = trip.itinerary_items.filter(i => i.date === todayStr)
+
+  // Day counter
+  const startMs = new Date(trip.start_date).getTime()
+  const endMs   = new Date(trip.end_date).getTime()
+  const todayMs = new Date(todayStr).getTime()
+  const totalDays = Math.round((endMs - startMs) / 86400000) + 1
+  const dayNumber = Math.round((todayMs - startMs) / 86400000) + 1
+  const dayCounter = dayNumber >= 1 && dayNumber <= totalDays ? `Day ${dayNumber} of ${totalDays}` : null
+
+  // Resolve weather coordinates: prefer today's items with stored coords, else geocode destination
+  const coordItem = todayItems.find(i => i.latitude != null && i.longitude != null)
+
+  type WeatherData = { temp: number; tempMax: number; tempMin: number; precipChance: number; condition: string; emoji: string }
+  const [weather, setWeather] = useState<WeatherData | null>(null)
+  const [weatherLoading, setWeatherLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    setWeather(null)
+    setWeatherLoading(true)
+
+    async function load() {
+      try {
+        let lat: number
+        let lon: number
+
+        if (coordItem?.latitude != null && coordItem?.longitude != null) {
+          lat = coordItem.latitude
+          lon = coordItem.longitude
+        } else {
+          const geoRes = await fetch(
+            `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(trip.destination)}&count=1`
+          )
+          const geoData = await geoRes.json()
+          const loc = geoData?.results?.[0]
+          if (!loc || cancelled) return
+          lat = loc.latitude
+          lon = loc.longitude
+        }
+
+        const wxRes = await fetch(
+          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+          `&current=temperature_2m,weathercode,precipitation_probability` +
+          `&daily=temperature_2m_max,temperature_2m_min&temperature_unit=celsius&forecast_days=1&timezone=auto`
+        )
+        const wx = await wxRes.json()
+        if (cancelled) return
+
+        const code: number = wx.current.weathercode
+        setWeather({
+          temp: Math.round(wx.current.temperature_2m),
+          tempMax: Math.round(wx.daily.temperature_2m_max[0]),
+          tempMin: Math.round(wx.daily.temperature_2m_min[0]),
+          precipChance: wx.current.precipitation_probability ?? 0,
+          ...wmoLabel(code),
+        })
+      } catch {
+        // silently fail — card just won't render
+      } finally {
+        if (!cancelled) setWeatherLoading(false)
+      }
+    }
+
+    load()
+    return () => { cancelled = true }
+  }, [trip.destination, coordItem?.latitude, coordItem?.longitude]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div>
       <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: C.inkMuted, marginBottom: 10 }}>
         Today · {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
       </p>
+
+      {/* Weather card */}
+      {weatherLoading ? (
+        <div style={{
+          background: C.white,
+          borderRadius: 10,
+          padding: '14px 16px',
+          border: `1px solid ${C.terraPale}`,
+          boxShadow: '0 1px 5px rgba(26,26,46,0.05)',
+          marginBottom: 16,
+          height: 64,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+        }}>
+          <div style={{ width: 40, height: 16, borderRadius: 4, background: C.sandDark }} />
+          <div style={{ width: 80, height: 16, borderRadius: 4, background: C.sandDark }} />
+          <div style={{ flex: 1 }} />
+          <div style={{ width: 48, height: 16, borderRadius: 4, background: C.sandDark }} />
+        </div>
+      ) : weather ? (
+        <div style={{
+          background: C.white,
+          borderRadius: 10,
+          padding: '14px 16px',
+          border: `1px solid ${C.terraPale}`,
+          boxShadow: '0 1px 5px rgba(26,26,46,0.05)',
+          marginBottom: 16,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+        }}>
+          <span style={{ fontSize: 26, lineHeight: 1, flexShrink: 0 }}>{weather.emoji}</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ fontSize: 13, fontWeight: 500, color: C.ink }}>{weather.condition}</p>
+            <p style={{ fontSize: 12, color: C.inkMuted, marginTop: 2 }}>
+              H:{weather.tempMax}° &nbsp;L:{weather.tempMin}° &nbsp;·&nbsp; 💧 {weather.precipChance}%
+            </p>
+          </div>
+          <div style={{ textAlign: 'right', flexShrink: 0 }}>
+            <p style={{ fontSize: 22, fontWeight: 600, color: C.ink, lineHeight: 1 }}>{weather.temp}°C</p>
+            {dayCounter && (
+              <p style={{ fontSize: 11, color: C.inkMuted, marginTop: 4 }}>{dayCounter}</p>
+            )}
+          </div>
+        </div>
+      ) : dayCounter ? (
+        <div style={{ marginBottom: 16 }}>
+          <p style={{ fontSize: 12, color: C.inkMuted }}>{dayCounter}</p>
+        </div>
+      ) : null}
 
       {todayItems.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '32px 0' }}>

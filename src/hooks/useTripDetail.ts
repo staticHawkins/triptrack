@@ -81,6 +81,8 @@ export function useTripDetail(tripId: string) {
     time?: string
     title: string
     location?: string
+    latitude?: number
+    longitude?: number
     notes?: string
     type?: string
   }) => {
