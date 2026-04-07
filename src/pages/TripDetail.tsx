@@ -741,7 +741,7 @@ function AddActivityForm({
           onChange={val => set('location', val)}
           onPlaceSelect={place => {
             if (place) {
-              setForm(f => ({ ...f, location: place.address, lat: place.lat, lng: place.lng }))
+              setForm(f => ({ ...f, location: place.name, lat: place.lat, lng: place.lng }))
             } else {
               setForm(f => ({ ...f, lat: null, lng: null }))
             }
@@ -918,25 +918,15 @@ function DashboardTab({ trip }: { trip: ReturnType<typeof useTripDetail>['trip']
   const todayStr = new Date().toISOString().split('T')[0]
   const todayItems = trip.itinerary_items.filter(i => i.date === todayStr)
 
-  // Day counter
-  const startMs = new Date(trip.start_date).getTime()
-  const endMs   = new Date(trip.end_date).getTime()
-  const todayMs = new Date(todayStr).getTime()
-  const totalDays = Math.round((endMs - startMs) / 86400000) + 1
-  const dayNumber = Math.round((todayMs - startMs) / 86400000) + 1
-  const dayCounter = dayNumber >= 1 && dayNumber <= totalDays ? `Day ${dayNumber} of ${totalDays}` : null
-
   // Resolve weather coordinates: prefer today's items with stored coords, else geocode destination
   const coordItem = todayItems.find(i => i.latitude != null && i.longitude != null)
 
   type WeatherData = { temp: number; tempMax: number; tempMin: number; precipChance: number; condition: string; emoji: string }
   const [weather, setWeather] = useState<WeatherData | null>(null)
-  const [weatherLoading, setWeatherLoading] = useState(true)
 
   useEffect(() => {
     let cancelled = false
     setWeather(null)
-    setWeatherLoading(true)
 
     async function load() {
       try {
@@ -960,7 +950,7 @@ function DashboardTab({ trip }: { trip: ReturnType<typeof useTripDetail>['trip']
         const wxRes = await fetch(
           `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
           `&current=temperature_2m,weathercode,precipitation_probability` +
-          `&daily=temperature_2m_max,temperature_2m_min&temperature_unit=celsius&forecast_days=1&timezone=auto`
+          `&daily=temperature_2m_max,temperature_2m_min&temperature_unit=fahrenheit&forecast_days=1&timezone=auto`
         )
         const wx = await wxRes.json()
         if (cancelled) return
@@ -974,9 +964,7 @@ function DashboardTab({ trip }: { trip: ReturnType<typeof useTripDetail>['trip']
           ...wmoLabel(code),
         })
       } catch {
-        // silently fail — card just won't render
-      } finally {
-        if (!cancelled) setWeatherLoading(false)
+        // silently fail
       }
     }
 
@@ -990,56 +978,12 @@ function DashboardTab({ trip }: { trip: ReturnType<typeof useTripDetail>['trip']
         Today · {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
       </p>
 
-      {/* Weather card */}
-      {weatherLoading ? (
-        <div style={{
-          background: C.white,
-          borderRadius: 10,
-          padding: '14px 16px',
-          border: `1px solid ${C.terraPale}`,
-          boxShadow: '0 1px 5px rgba(26,26,46,0.05)',
-          marginBottom: 16,
-          height: 64,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-        }}>
-          <div style={{ width: 40, height: 16, borderRadius: 4, background: C.sandDark }} />
-          <div style={{ width: 80, height: 16, borderRadius: 4, background: C.sandDark }} />
-          <div style={{ flex: 1 }} />
-          <div style={{ width: 48, height: 16, borderRadius: 4, background: C.sandDark }} />
-        </div>
-      ) : weather ? (
-        <div style={{
-          background: C.white,
-          borderRadius: 10,
-          padding: '14px 16px',
-          border: `1px solid ${C.terraPale}`,
-          boxShadow: '0 1px 5px rgba(26,26,46,0.05)',
-          marginBottom: 16,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-        }}>
-          <span style={{ fontSize: 26, lineHeight: 1, flexShrink: 0 }}>{weather.emoji}</span>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ fontSize: 13, fontWeight: 500, color: C.ink }}>{weather.condition}</p>
-            <p style={{ fontSize: 12, color: C.inkMuted, marginTop: 2 }}>
-              H:{weather.tempMax}° &nbsp;L:{weather.tempMin}° &nbsp;·&nbsp; 💧 {weather.precipChance}%
-            </p>
-          </div>
-          <div style={{ textAlign: 'right', flexShrink: 0 }}>
-            <p style={{ fontSize: 22, fontWeight: 600, color: C.ink, lineHeight: 1 }}>{weather.temp}°C</p>
-            {dayCounter && (
-              <p style={{ fontSize: 11, color: C.inkMuted, marginTop: 4 }}>{dayCounter}</p>
-            )}
-          </div>
-        </div>
-      ) : dayCounter ? (
-        <div style={{ marginBottom: 16 }}>
-          <p style={{ fontSize: 12, color: C.inkMuted }}>{dayCounter}</p>
-        </div>
-      ) : null}
+      {/* Weather */}
+      {weather && (
+        <p style={{ fontSize: 12, color: C.inkMuted, marginBottom: 14 }}>
+          {weather.emoji} {weather.condition}
+        </p>
+      )}
 
       {todayItems.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '32px 0' }}>
@@ -1260,6 +1204,21 @@ export default function TripDetail() {
   const isOver = remaining < 0
   const pct = totalBudget > 0 ? Math.min(100, (totalSpent / totalBudget) * 100) : 0
 
+  const todayStr = new Date().toISOString().split('T')[0]
+  const startMs = new Date(trip.start_date + 'T12:00:00').getTime()
+  const endMs   = new Date(trip.end_date + 'T12:00:00').getTime()
+  const todayMs = new Date(todayStr + 'T12:00:00').getTime()
+  const daysUntilStart = Math.round((startMs - todayMs) / 86400000)
+  const totalTripDays  = Math.round((endMs - startMs) / 86400000) + 1
+  const dayNumber      = Math.round((todayMs - startMs) / 86400000) + 1
+  const daysLeftInTrip = Math.round((endMs - todayMs) / 86400000)
+  let tripCountdown: { label: string; sublabel: string } | null = null
+  if (daysUntilStart > 0) {
+    tripCountdown = { label: String(daysUntilStart), sublabel: daysUntilStart === 1 ? 'day away' : 'days away' }
+  } else if (dayNumber >= 1 && dayNumber <= totalTripDays) {
+    tripCountdown = { label: `${daysLeftInTrip + 1}`, sublabel: `day${daysLeftInTrip === 0 ? '' : 's'} left` }
+  }
+
   const isOwner = trip.trip_members.some(m => m.user_id === user?.id && m.role === 'owner')
   const members = trip.trip_members.map(m => m.profiles)
 
@@ -1298,26 +1257,54 @@ export default function TripDetail() {
       {/* Hero banner */}
       <TripBanner destination={trip.destination} height={140}>
         <div
-          onClick={() => setShowEditTrip(true)}
-          style={{ padding: '0 20px 0', cursor: 'pointer' }}
+          style={{ padding: '0 20px 14px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-            <p
+          <div
+            onClick={() => setShowEditTrip(true)}
+            style={{ cursor: 'pointer', minWidth: 0 }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+              <p
+                style={{
+                  fontFamily: "'Playfair Display', serif",
+                  fontSize: 24,
+                  fontWeight: 700,
+                  color: '#fff',
+                  textShadow: '0 1px 8px rgba(0,0,0,0.4)',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+              >
+                {trip.name}
+              </p>
+              <Pencil size={14} color="rgba(255,255,255,0.6)" style={{ flexShrink: 0 }} />
+            </div>
+            <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', textShadow: '0 1px 4px rgba(0,0,0,0.4)' }}>
+              {trip.destination} · {fmtDate(trip.start_date)} – {fmtDateFull(trip.end_date)}
+            </p>
+          </div>
+
+          {tripCountdown && (
+            <div
               style={{
-                fontFamily: "'Playfair Display', serif",
-                fontSize: 24,
-                fontWeight: 700,
-                color: '#fff',
-                textShadow: '0 1px 8px rgba(0,0,0,0.4)',
+                flexShrink: 0,
+                textAlign: 'center',
+                background: 'rgba(255,255,255,0.15)',
+                border: '1px solid rgba(255,255,255,0.3)',
+                borderRadius: 12,
+                padding: '8px 14px',
+                backdropFilter: 'blur(6px)',
               }}
             >
-              {trip.name}
-            </p>
-            <Pencil size={14} color="rgba(255,255,255,0.6)" />
-          </div>
-          <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', textShadow: '0 1px 4px rgba(0,0,0,0.4)' }}>
-            {trip.destination} · {fmtDate(trip.start_date)} – {fmtDateFull(trip.end_date)}
-          </p>
+              <p style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, fontWeight: 700, color: '#fff', lineHeight: 1, textShadow: '0 1px 6px rgba(0,0,0,0.3)' }}>
+                {tripCountdown.label}
+              </p>
+              <p style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.75)', marginTop: 2, letterSpacing: '0.5px' }}>
+                {tripCountdown.sublabel}
+              </p>
+            </div>
+          )}
         </div>
       </TripBanner>
 

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 
 interface PlaceResult {
-  address: string
+  name: string
   lat: number
   lng: number
 }
@@ -56,14 +56,13 @@ export default function PlacesAutocomplete({ value, onChange, onPlaceSelect, sty
           onPlaceSelect(null)
           return
         }
-        const address = place.formatted_address ?? place.name ?? ''
+        const name = place.name ?? place.formatted_address ?? ''
         onPlaceSelect({
-          address,
+          name,
           lat: place.geometry.location.lat(),
           lng: place.geometry.location.lng(),
         })
-        // Sync the input value with the chosen address
-        onChange(address)
+        onChange(name)
       })
     }).catch(() => {
       // API failed to load — component falls back to plain input
