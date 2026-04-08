@@ -5,7 +5,7 @@
 
 ## 1. What This Is
 
-TripTrack is a mobile-friendly web app for planning and tracking multiple trips with friends and family. Users manage a list of trips, build day-by-day itineraries, set per-category budgets, and log expenses as each trip unfolds. Multiple travelers share the same trip, so everyone can view the plan and see how spending tracks against each category budget in real time.
+TripTrack is a mobile-friendly web app for planning and tracking multiple trips with friends and family. Users manage a list of trips, build day-by-day itineraries, set a trip budget, and log expenses as each trip unfolds. Multiple travelers share the same trip, so everyone can view the plan and see how spending tracks against the budget in real time.
 
 ---
 
@@ -13,13 +13,15 @@ TripTrack is a mobile-friendly web app for planning and tracking multiple trips 
 
 - **Trips list**: Home screen showing all trips the user belongs to — trip name, destination photo, dates, trip status, and a simple budget health indicator (Under budget / Over budget). No numbers on the list — full budget detail lives inside each trip.
 - **Trip creation**: Create a named trip with destination, date range, and per-category budgets.
-- **Trip editing**: Edit trip name, destination, and dates from the trip banner. Per-category budgets are editable from the Budget tab.
-- **Per-category budgets**: Set individual budgets for each category (Food, Transport, Lodging, Activities, Supplies, Other) when creating or editing a trip.
+- **Trip editing**: Edit trip name, destination, dates, and total budget from the trip banner.
+- **Trip budget**: Set a single total budget for the trip when creating or editing it. Per-category budgets are removed — categories track spend only.
 - **Shared access**: Invite friends/family by email; all members can view and edit the trip.
 - **Itinerary builder**: Add, edit, and delete activities on specific days — each with a type (Activity | Meal | Transport | Stay | Other), name, time, location, and optional notes.
 - **Expense logging**: Log, edit, and delete expenses with a category, amount, description, date (defaults to today, editable for past expenses), who paid, and an optional link to an itinerary item. Expenses logged before the trip start date are automatically tagged as "Pre-trip" in the UI (e.g. toiletries, travel-size items, gear bought before departure).
-- **Budget tracker**: Per-category breakdown (budget vs. spent vs. remaining per category). The overall Budget / Spent / Remaining summary lives in the trip hero bar, visible from both tabs. No "Planned" total — that concept is removed.
-- **Trip dashboard**: Shows today's itinerary items and a single budget health bar (spent vs. remaining). Category drill-down lives in the Budget tab, not here.
+- **Budget tracker**: Per-category spend breakdown (no per-category budget amounts — single trip budget only). The overall Budget / Spent / Remaining summary lives in the trip hero bar, visible from both tabs.
+- **Budget Insights**: Panel in the Budget tab showing context-aware recommendations — burn rate warnings with severity levels (critical / warning / positive), flagging top spending category and average expense size.
+- **Trip dashboard**: Shows today's itinerary items, an inline weather line (temperature + condition from Open-Meteo), and a single budget health bar (spent vs. remaining). Category drill-down lives in the Budget tab.
+- **Trip banner countdown**: Frosted-glass badge in the hero showing "X days away" (upcoming) or "X days left" (in progress), visible from all tabs.
 
 ---
 
@@ -41,7 +43,7 @@ TripTrack is a mobile-friendly web app for planning and tracking multiple trips 
 User lands on the Trips screen and sees all trips they belong to — past, current, and upcoming. Each trip card shows the destination, dates, and a budget health indicator. They tap a trip to enter it and see the dashboard.
 
 **Planning a trip**
-User taps "New Trip," enters a name, destination, and dates, then sets a budget for each spending category — e.g., $400 for Lodging, $200 for Food, $150 for Transport. They add itinerary items day by day — e.g., "Day 1: Arrive, check in hotel at 3pm; dinner at La Mar at 7pm." They share the trip with companions via email invite. Companions accept and can view/edit the same trip.
+User taps "New Trip," enters a name, destination, dates, and a total trip budget (e.g., $1,500). They add itinerary items day by day — e.g., "Day 1: Arrive, check in hotel at 3pm; dinner at La Mar at 7pm." They share the trip with companions via email invite. Companions accept and can view/edit the same trip.
 
 **Logging an expense on the road**
 A user taps "Add Expense," picks a category (e.g., Food), enters the amount, a short description, and a date (defaults to today but can be changed for past expenses). On save, the budget tracker immediately updates that category's spent vs. remaining.
@@ -62,6 +64,8 @@ Any member opens the app and lands on the trip dashboard. They see today's sched
 | Database | Supabase Postgres | Relational data, real-time sync for shared trips |
 | Auth | Supabase Auth | Email-based invites, session management |
 | Hosting | Vercel | Standard stack |
+| Location | Google Places API | Autocomplete + lat/lng capture for itinerary items |
+| Weather | Open-Meteo | Free, no-auth weather API for dashboard widget |
 
 > **Assumption:** Supabase's real-time subscriptions handle live budget updates across devices without a custom backend.
 
@@ -73,19 +77,15 @@ Any member opens the app and lands on the trip dashboard. They see today's sched
 - `id` (uuid), `email` (text), `display_name` (text)
 
 **Trip**
-- `id` (uuid), `name` (text), `destination` (text), `start_date` (date), `end_date` (date), `created_by` (user id)
-- One trip has many category budgets, itinerary items, expenses, and members.
-
-**CategoryBudget**
-- `id` (uuid), `trip_id` (uuid), `category` (enum: Food | Transport | Lodging | Activities | Supplies | Other), `amount` (numeric)
-- One row per category per trip. Not all categories need a budget set.
+- `id` (uuid), `name` (text), `destination` (text), `start_date` (date), `end_date` (date), `budget` (numeric, optional), `created_by` (user id)
+- One trip has many itinerary items, expenses, and members. No per-category budget rows.
 
 **TripMember**
 - `trip_id` (uuid), `user_id` (uuid), `role` (enum: owner | member)
 - Join table connecting users to trips.
 
 **ItineraryItem**
-- `id` (uuid), `trip_id` (uuid), `date` (date), `time` (time, optional), `title` (text), `location` (text, optional), `notes` (text, optional), `type` (enum: Activity | Meal | Transport | Stay | Other)
+- `id` (uuid), `trip_id` (uuid), `date` (date), `time` (time, optional), `title` (text), `location` (text, optional), `latitude` (float, optional), `longitude` (float, optional), `notes` (text, optional), `type` (enum: Activity | Meal | Transport | Stay | Other)
 
 **Expense**
 - `id` (uuid), `trip_id` (uuid), `paid_by` (user id), `amount` (numeric), `category` (enum: Food | Transport | Lodging | Activities | Supplies | Other), `description` (text), `date` (date — user-specified, defaults to today), `itinerary_item_id` (uuid, optional — links to an ItineraryItem), `created_at` (timestamp)
@@ -113,18 +113,21 @@ triptrack/
 │   ├── pages/
 │   │   ├── LoginPage.tsx   # Auth screen (email + password)
 │   │   ├── Trips.tsx       # Trips list (home screen)
-│   │   ├── TripNew.tsx     # Create trip (name, dates, category budgets)
-│   │   └── TripDetail.tsx  # Full trip view — Itinerary + Budget tabs
+│   │   ├── TripNew.tsx     # Create trip (name, destination, dates, total budget)
+│   │   └── TripDetail.tsx  # Full trip view — Dashboard / Itinerary / Budget tabs
 │   ├── components/
-│   │   ├── TopNav.tsx      # Back button + page title bar
-│   │   ├── TripBanner.tsx  # Destination photo/gradient hero with scrim
-│   │   ├── Sheet.tsx       # Slide-up bottom sheet modal
-│   │   ├── ProgressBar.tsx # Thin horizontal bar (budget/spend)
-│   │   └── CategoryIcon.tsx # SVG icon per expense category
+│   │   ├── TopNav.tsx           # Back button + page title bar
+│   │   ├── TripBanner.tsx       # Destination photo/gradient hero with scrim
+│   │   ├── Sheet.tsx            # Slide-up bottom sheet modal
+│   │   ├── ProgressBar.tsx      # Thin horizontal bar (budget/spend)
+│   │   ├── CategoryIcon.tsx     # SVG icon per expense category
+│   │   ├── BudgetInsights.tsx   # Insight cards (burn rate warnings, recommendations)
+│   │   └── PlacesAutocomplete.tsx # Google Places API location search with lat/lng capture
 │   ├── lib/
-│   │   ├── supabase.ts     # Supabase client singleton
-│   │   ├── types.ts        # All TypeScript interfaces + enums
-│   │   └── constants.ts    # C color palette, CATEGORY_META, fmtDate, fmtDateFull, destinationGradient, getTripStatus
+│   │   ├── supabase.ts          # Supabase client singleton
+│   │   ├── types.ts             # All TypeScript interfaces + enums
+│   │   ├── constants.ts         # C color palette, CATEGORY_META, fmtDate, fmtDateFull, destinationGradient, getTripStatus
+│   │   └── budgetInsights.ts    # Burn rate logic and insight generation
 │   ├── hooks/
 │   │   ├── useAuth.ts      # Supabase Auth session wrapper
 │   │   ├── useTrips.ts     # Trip list + budget summaries
@@ -143,8 +146,8 @@ triptrack/
 | Phase | Goal | What's built |
 |---|---|---|
 | 1 | Scaffold + Auth | Vite project setup, Supabase connected, login/signup screens, nav shell |
-| 2 | Trip & Itinerary | Create trip, set per-category budgets, invite members, itinerary builder (add/edit/delete items by day) |
-| 3 | Budget & Expenses | Expense logging with date picker, per-category budget tracker UI, dashboard screen |
+| 2 | Trip & Itinerary | Create trip with total budget, invite members, itinerary builder (add/edit/delete items by day, location autocomplete) |
+| 3 | Budget & Expenses | Expense logging with date picker, per-category spend tracker, budget insights, dashboard with weather widget |
 | 4 | Polish + Deploy | Real-time sync, edge case handling, Vercel deploy |
 
 ---
@@ -200,6 +203,7 @@ triptrack/
 **Trip detail hero**
 - 140px destination photo with scrim
 - Trip name + destination/dates overlaid
+- Frosted-glass countdown badge: "X days away" (upcoming) or "X days left" (in progress)
 - Dark ink budget bar below photo showing Budget / Spent / Remaining (3 numbers only — no "Planned")
 - Single progress bar. Status label: "Under budget / Over budget" only — no "On track" (v2: time-based tracking)
 
@@ -217,11 +221,13 @@ Each tab owns its own primary action button (top-right):
 
 **Dashboard tab**
 - Today's itinerary items only (quick glance)
+- Inline weather line: temperature + condition (Open-Meteo, using today's item coords or trip destination geocode)
 - Single overall budget health bar (spent vs remaining)
 - Category drill-down lives in Budget tab, not here
 
 **Budget tab**
-- Per-category bars: category SVG icon + name + budget amount + spent amount + progress bar
+- Per-category bars: category SVG icon + name + spent amount (no per-category budget amounts)
+- Budget Insights panel: context-aware recommendations with critical / warning / positive severity indicators
 - Full chronological expense list below
 - Pre-trip expenses (date before trip start) tagged with gold "Pre-trip" pill
 - Expenses show: date, description, category icon, linked itinerary item if any, amount
