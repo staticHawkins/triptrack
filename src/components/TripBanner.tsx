@@ -19,18 +19,15 @@ export default function TripBanner({ destination, height = 140, children }: Prop
       return
     }
 
-    const key = import.meta.env.VITE_UNSPLASH_ACCESS_KEY
-    if (!key) return
-
     const controller = new AbortController()
 
     fetch(
-      `https://api.unsplash.com/search/photos?query=${encodeURIComponent(destination + ' travel landscape')}&per_page=1&orientation=landscape`,
-      { headers: { Authorization: `Client-ID ${key}` }, signal: controller.signal }
+      `/api/unsplash-photo?destination=${encodeURIComponent(destination)}`,
+      { signal: controller.signal }
     )
       .then(r => r.json())
-      .then(data => {
-        const url = data?.results?.[0]?.urls?.regular ?? null
+      .then((data: { url?: string | null }) => {
+        const url = data?.url ?? null
         cache[destination] = url
         setPhotoUrl(url)
       })
