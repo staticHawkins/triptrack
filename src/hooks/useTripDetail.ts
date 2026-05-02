@@ -4,7 +4,7 @@ import { getTripStatus } from '../lib/constants'
 import type { Trip, TripMember, Profile, ItineraryItem, Expense } from '../lib/types'
 
 export interface TripMemberWithProfile extends TripMember {
-  profiles: Pick<Profile, 'display_name' | 'email'>
+  profiles: Pick<Profile, 'display_name' | 'email'> | null
 }
 
 export interface TripDetail extends Trip {

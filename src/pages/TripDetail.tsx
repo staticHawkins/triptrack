@@ -506,7 +506,7 @@ function BudgetTab({
                   <CategoryIcon category={exp.category as Category} color={meta.color} size={12} />
                   {exp.category}
                   {linkedItem ? ` · ${linkedItem.title}` : ''}
-                  {exp.paid_by ? ` · ${trip.trip_members.find(m => m.user_id === exp.paid_by)?.profiles.display_name ?? 'Unknown'}` : ''}
+                  {exp.paid_by ? ` · ${trip.trip_members.find(m => m.user_id === exp.paid_by)?.profiles?.display_name ?? 'Unknown'}` : ''}
                 </p>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
@@ -1038,7 +1038,7 @@ function LogExpenseForm({
           style={{ ...sheetInputStyle, appearance: 'auto' }}>
           {trip.trip_members.map(m => (
             <option key={m.user_id} value={m.user_id}>
-              {m.profiles.display_name ?? m.profiles.email.split('@')[0]}
+              {m.profiles?.display_name ?? m.profiles?.email.split('@')[0] ?? 'Unknown'}
             </option>
           ))}
         </select>
@@ -1133,7 +1133,7 @@ export default function TripDetail() {
   }
 
   const isOwner = trip.trip_members.some(m => m.user_id === user?.id && m.role === 'owner')
-  const members = trip.trip_members.map(m => m.profiles)
+  const members = trip.trip_members.flatMap(m => m.profiles ? [m.profiles] : [])
 
   return (
     <div style={{ minHeight: '100vh', background: C.sand }}>
