@@ -113,24 +113,22 @@ export default function TripNew() {
           />
         </Field>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <Field label="Start date">
-            <input
-              type="date"
-              value={form.start}
-              onChange={e => set('start', e.target.value)}
-              style={inputStyle}
-            />
-          </Field>
-          <Field label="End date">
-            <input
-              type="date"
-              value={form.end}
-              onChange={e => set('end', e.target.value)}
-              style={inputStyle}
-            />
-          </Field>
-        </div>
+        <Field label="Start date">
+          <input
+            type="date"
+            value={form.start}
+            onChange={e => set('start', e.target.value)}
+            style={inputStyle}
+          />
+        </Field>
+        <Field label="End date">
+          <input
+            type="date"
+            value={form.end}
+            onChange={e => set('end', e.target.value)}
+            style={inputStyle}
+          />
+        </Field>
 
         <Field label="Total budget (optional)">
           <div style={{ position: 'relative' }}>
